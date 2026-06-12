@@ -126,22 +126,25 @@ async function loadInitialState() {
 /* ─── Provider / model selects ───────────────────────────────── */
 
 function populateProviderOptions() {
-  el.providerSelect.innerHTML = Object.entries(providers)
-    .map(
-      ([id, p]) =>
-        `<option value="${escapeHTML(id)}">${escapeHTML(p.name)}</option>`,
-    )
-    .join("");
+  el.providerSelect.replaceChildren();
+  for (const [id, p] of Object.entries(providers)) {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = p.name;
+    el.providerSelect.appendChild(opt);
+  }
 }
 
 function populateModelOptions(providerId, selectedModel) {
   const provider = providers[providerId] || providers.gemini;
-  el.modelSelect.innerHTML = provider.models
-    .map(
-      (m) =>
-        `<option value="${escapeHTML(m.id)}">${escapeHTML(m.name)}</option>`,
-    )
-    .join("");
+  el.modelSelect.replaceChildren();
+  
+  for (const m of provider.models) {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.name;
+    el.modelSelect.appendChild(opt);
+  }
 
   const has = provider.models.some((m) => m.id === selectedModel);
   el.modelSelect.value = has ? selectedModel : provider.models[0].id;
@@ -401,7 +404,9 @@ function renderAnalysis(analysis) {
     ? `<div class="truncation-notice">Document was too long — only the first portion was analyzed.</div>`
     : "";
 
-  el.analysisResults.innerHTML = `
+  safeSetHTML(
+    el.analysisResults,
+    `
     <div class="analysis-header">
       <div class="score-block">
         <div class="score-number">${analysis.risk_score}</div>
@@ -417,7 +422,8 @@ function renderAnalysis(analysis) {
       </div>
     </div>
     <div class="findings-list">${findings}</div>
-  `;
+  `,
+  );
 
   // Wire copy buttons on quotes
   for (const btn of el.analysisResults.querySelectorAll("[data-copy]")) {
@@ -459,11 +465,11 @@ async function renderHistory() {
   const history = await getHistory();
 
   if (history.length === 0) {
-    el.historyList.innerHTML = `<p class="history-empty">No analyses yet.</p>`;
+    safeSetHTML(el.historyList, `<p class="history-empty">No analyses yet.</p>`);
     return;
   }
 
-  el.historyList.innerHTML = history
+  const historyHtml = history
     .map(
       (entry) => `
     <div class="history-item" data-history-id="${escapeHTML(entry.id)}">
@@ -476,6 +482,8 @@ async function renderHistory() {
   `,
     )
     .join("");
+
+  safeSetHTML(el.historyList, historyHtml);
 
   for (const item of el.historyList.querySelectorAll("[data-history-id]")) {
     item.addEventListener("click", () =>
@@ -533,7 +541,7 @@ function showMessage(element, message, type) {
 }
 
 function showHtmlMessage(element, htmlContent, type) {
-  element.innerHTML = htmlContent;
+  safeSetHTML(element, htmlContent);
   element.className = type === "error" ? "message message--error" : "message";
 }
 
@@ -579,6 +587,12 @@ function getModelLimit(settings) {
 }
 
 /* ─── Utilities ──────────────────────────────────────────────── */
+
+function safeSetHTML(element, htmlString) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlString, "text/html");
+  element.replaceChildren(...doc.body.childNodes);
+}
 
 function getRiskLevel(score) {
   if (score >= 70) return "high";

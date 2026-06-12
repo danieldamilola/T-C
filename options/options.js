@@ -236,6 +236,11 @@ async function handleSettingsSubmit(event) {
 
 /* ─── Dashboard rendering ────────────────────────────────────── */
 
+/**
+ * Renders the initial dashboard view.
+ * Evaluates the current active tab and API key status to determine
+ * whether the "Analyze This Page" button should be enabled.
+ */
 async function renderDashboard() {
   renderTargetCell();
   renderProviderCell();
@@ -286,6 +291,13 @@ async function renderLastAnalysis() {
 
 /* ─── Analysis flow ──────────────────────────────────────────── */
 
+/**
+ * Main orchestration function for analyzing a page.
+ * 1. Validates API key and target tab.
+ * 2. Injects scraper into the target tab and extracts text.
+ * 3. Truncates text if necessary and calls the AI provider.
+ * 4. Parses the response, saves to history, and updates the UI.
+ */
 async function analyzeCurrentPage() {
   hideMessage(el.dashboardMessage);
 
@@ -366,6 +378,13 @@ async function analyzeCurrentPage() {
 
 /* ─── Analysis rendering ─────────────────────────────────────── */
 
+/**
+ * Renders a completed AI analysis to the DOM.
+ * Generates the HTML for the score, summary, and findings list,
+ * and wires up the interactive "Copy" and "Export" buttons.
+ *
+ * @param {Object} analysis - The parsed analysis object to render.
+ */
 function renderAnalysis(analysis) {
   const riskLevel = getRiskLevel(analysis.risk_score);
   const findings = analysis.findings.map(renderFinding).join("");

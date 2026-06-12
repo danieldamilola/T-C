@@ -338,13 +338,21 @@ async function analyzeCurrentPage() {
 
     setLoading("Analyzing with AI…");
 
-    const raw = await analyze(prepared.text, state.settings);
+    const raw = await analyze(prepared.text, state.settings, state.targetTab.url);
     const analysis = parse(raw);
 
     hideLoading();
 
     if (analysis.is_terms === false) {
-      showMessage(el.dashboardMessage, analysis.message, "error");
+      if (analysis.suggested_url) {
+        showHtmlMessage(
+          el.dashboardMessage,
+          `${escapeHTML(analysis.message)}<br><br><span style="opacity:0.8">Maybe try:</span> <a href="${escapeHTML(analysis.suggested_url)}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">${escapeHTML(analysis.suggested_url)}</a>`,
+          "error"
+        );
+      } else {
+        showMessage(el.dashboardMessage, analysis.message, "error");
+      }
       showView("dashboard-view");
       return;
     }
@@ -521,6 +529,11 @@ function hideLoading() {
 
 function showMessage(element, message, type) {
   element.textContent = message;
+  element.className = type === "error" ? "message message--error" : "message";
+}
+
+function showHtmlMessage(element, htmlContent, type) {
+  element.innerHTML = htmlContent;
   element.className = type === "error" ? "message message--error" : "message";
 }
 

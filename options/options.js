@@ -560,7 +560,9 @@ function getModelLimit(settings) {
   if (model?.analysisMaxInputTokens) return model.analysisMaxInputTokens;
   if (!model) return 8000;
 
-  return Math.min(50000, Math.floor(model.maxTokens * 0.25));
+  // Cap at 8,000 tokens to prevent massive API credit drain.
+  // 8k tokens ≈ 32,000 characters, enough for the vast majority of T&Cs.
+  return Math.min(8000, Math.floor(model.maxTokens * 0.25));
 }
 
 /* ─── Utilities ──────────────────────────────────────────────── */

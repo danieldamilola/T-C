@@ -4,8 +4,15 @@
   "version": "1.0.0",
   "description": "AI-powered Terms & Conditions analyzer. Understand what you're agreeing to.",
   "permissions": ["activeTab", "contextMenus", "scripting", "storage", "tabs"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tc-lens@danieldamilola.com",
+      "strict_min_version": "109.0"
+    }
+  },
   "background": {
     "service_worker": "background.js",
+    "scripts": ["background.js"],
     "type": "module"
   },
   "icons": {

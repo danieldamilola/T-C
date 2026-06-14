@@ -52,9 +52,11 @@ const NOISE_SELECTORS = [
 /* ─── Main extraction ────────────────────────────────────────── */
 
 function extractPageText() {
+  // Semantic containers first (main, article) to avoid false positives
+  // from sidebars or banners matching legal-keyword selectors.
   const text =
-    getByLegalSelectors() ||
     getBySemanticContainer() ||
+    getByLegalSelectors() ||
     getByParagraphDensity() ||
     getFullBodyText();
 

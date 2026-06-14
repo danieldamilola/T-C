@@ -1,6 +1,8 @@
 /**
  * @file options.js
  * @description Dashboard orchestration for T&C Lens.
+ *              Handles bootstrap, state, event wiring, view routing,
+ *              settings form, and analysis flow coordination.
  */
 
 import {
@@ -13,20 +15,36 @@ import {
 import { parse } from "../lib/parser.js";
 import {
   clearHistory,
-  getHistory,
-  getLatestAnalysisForUrl,
   getSettings,
   saveAnalysis,
   saveSettings,
 } from "../lib/storage.js";
+import {
+  escapeHTML,
+  showMessage,
+  showHtmlMessage,
+  hideMessage,
+  getUserMessage,
+  getDomain,
+  showConfirmModal,
+} from "./utils.js";
+import {
+  renderDashboard,
+  renderAnalysis,
+  renderHistory,
+} from "./renderer.js";
+import { exportAnalysis } from "./export.js";
 
 const providers = getProviders();
+
+/** @type {{ settings: Object|null, targetTab: Object|null, targetTabId: number|null }} */
 const state = {
   settings: null,
   targetTab: null,
   targetTabId: null,
 };
 
+/** @type {Object<string, HTMLElement>} */
 const el = {};
 
 /* ─── Bootstrap ──────────────────────────────────────────────── */
@@ -71,6 +89,10 @@ function bindElements() {
   el.settingsMessage = document.getElementById("settings-message");
   el.historyList = document.getElementById("history-list");
   el.clearHistoryBtn = document.getElementById("btn-clear-history");
+
+  // Coming soon / BYOK toggle
+  el.comingSoonBanner = document.getElementById("coming-soon-banner");
+  el.byokFields = document.getElementById("byok-fields");
 
   // Loading
   el.loadingOverlay = document.getElementById("loading-overlay");
@@ -118,9 +140,9 @@ async function loadInitialState() {
   state.targetTabId = stored.targetTabId;
   state.targetTab = await getTargetTab(state.targetTabId);
 
-  await renderDashboard();
+  await renderDashboard(state, el, providers);
   updateCostEstimate();
-  await renderHistory();
+  await renderHistory(el, openHistoryEntry);
 }
 
 /* ─── Provider / model selects ───────────────────────────────── */
@@ -130,7 +152,7 @@ function populateProviderOptions() {
   for (const [id, p] of Object.entries(providers)) {
     const opt = document.createElement("option");
     opt.value = id;
-    opt.textContent = p.name;
+    opt.textContent = p.comingSoon ? `${p.name} — Coming Soon` : p.name;
     el.providerSelect.appendChild(opt);
   }
 }
@@ -138,7 +160,7 @@ function populateProviderOptions() {
 function populateModelOptions(providerId, selectedModel) {
   const provider = providers[providerId] || providers.gemini;
   el.modelSelect.replaceChildren();
-  
+
   for (const m of provider.models) {
     const opt = document.createElement("option");
     opt.value = m.id;
@@ -152,13 +174,23 @@ function populateModelOptions(providerId, selectedModel) {
 
 function applySettingsToForm(settings) {
   el.providerSelect.value = settings.provider;
+  handleProviderChange();
   populateModelOptions(settings.provider, settings.model);
   el.apiKeyInput.value = settings.apiKey || "";
 }
 
 function handleProviderChange() {
-  const provider = providers[el.providerSelect.value];
-  populateModelOptions(el.providerSelect.value, provider.models[0].id);
+  const providerId = el.providerSelect.value;
+  const provider = providers[providerId];
+
+  // Toggle between coming-soon banner and BYOK fields
+  const isComingSoon = Boolean(provider.comingSoon);
+  el.comingSoonBanner.classList.toggle("hidden", !isComingSoon);
+  el.byokFields.classList.toggle("hidden", isComingSoon);
+
+  if (!isComingSoon) {
+    populateModelOptions(providerId, provider.models[0].id);
+  }
 }
 
 function updateCostEstimate() {
@@ -180,7 +212,7 @@ function updateCostEstimate() {
   if (cost.totalCost === 0) {
     el.costEstimate.textContent = "free tier";
   } else {
-    el.costEstimate.textContent = `~$${cost.totalCost.toFixed(4)} / analysis`;
+    el.costEstimate.textContent = `~$${cost.totalCost.toFixed(4)} base cost`;
   }
 }
 
@@ -234,62 +266,7 @@ async function handleSettingsSubmit(event) {
   });
 
   showMessage(el.settingsMessage, "Saved.", "success");
-  await renderDashboard();
-}
-
-/* ─── Dashboard rendering ────────────────────────────────────── */
-
-/**
- * Renders the initial dashboard view.
- * Evaluates the current active tab and API key status to determine
- * whether the "Analyze This Page" button should be enabled.
- */
-async function renderDashboard() {
-  renderTargetCell();
-  renderProviderCell();
-  await renderLastAnalysis();
-}
-
-function renderTargetCell() {
-  if (!state.targetTab) {
-    el.targetStatus.className = "status-dot status-dot--danger";
-    el.targetTitle.textContent = "No page selected";
-    el.targetUrl.textContent =
-      "Go to a Terms or Privacy page and click the extension icon.";
-    el.analyzeButton.disabled = true;
-    return;
-  }
-
-  el.targetStatus.className = "status-dot status-dot--ok";
-  el.targetTitle.textContent = state.targetTab.title || "Untitled page";
-  el.targetUrl.textContent = state.targetTab.url || "";
-  el.analyzeButton.disabled = false;
-}
-
-function renderProviderCell() {
-  const provider = providers[state.settings.provider];
-  const hasKey = Boolean(state.settings.apiKey?.trim());
-  const name = provider?.name || state.settings.provider;
-
-  el.providerName.textContent = name;
-  el.apiStatus.className = hasKey
-    ? "status-dot status-dot--ok"
-    : "status-dot status-dot--warn";
-  el.providerStatus.textContent = hasKey
-    ? `${el.modelSelect.value || state.settings.model}`
-    : "No API key — go to Settings.";
-}
-
-async function renderLastAnalysis() {
-  if (!state.targetTab?.url) {
-    el.lastAnalysis.textContent = "";
-    return;
-  }
-
-  const latest = await getLatestAnalysisForUrl(state.targetTab.url);
-  el.lastAnalysis.textContent = latest
-    ? `Last run ${formatDate(latest.analyzedAt)} · score ${latest.risk_score}`
-    : "";
+  await renderDashboard(state, el, providers);
 }
 
 /* ─── Analysis flow ──────────────────────────────────────────── */
@@ -316,7 +293,7 @@ async function analyzeCurrentPage() {
 
   state.targetTab = await getTargetTab(state.targetTabId);
   if (!state.targetTab) {
-    renderTargetCell();
+    renderDashboard(state, el, providers);
     showMessage(
       el.dashboardMessage,
       "That page has been closed. Re-open it and click the extension icon again.",
@@ -375,10 +352,10 @@ async function analyzeCurrentPage() {
       score: analysis.risk_score,
     });
 
-    renderAnalysis(entry);
+    renderAnalysis(entry, el);
     document.getElementById("btn-export").onclick = () => exportAnalysis(entry);
-    await renderDashboard();
-    await renderHistory();
+    await renderDashboard(state, el, providers);
+    await renderHistory(el, openHistoryEntry);
     showView("analysis-view");
   } catch (error) {
     hideLoading();
@@ -387,124 +364,22 @@ async function analyzeCurrentPage() {
   }
 }
 
-/* ─── Analysis rendering ─────────────────────────────────────── */
-
-/**
- * Renders a completed AI analysis to the DOM.
- * Generates the HTML for the score, summary, and findings list,
- * and wires up the interactive "Copy" and "Export" buttons.
- *
- * @param {Object} analysis - The parsed analysis object to render.
- */
-function renderAnalysis(analysis) {
-  const riskLevel = getRiskLevel(analysis.risk_score);
-  const findings = analysis.findings.map(renderFinding).join("");
-
-  const truncationNotice = analysis.wasTruncated
-    ? `<div class="truncation-notice">Document was too long — only the first portion was analyzed.</div>`
-    : "";
-
-  safeSetHTML(
-    el.analysisResults,
-    `
-    <div class="analysis-header">
-      <div class="score-block">
-        <div class="score-number">${analysis.risk_score}</div>
-        <div class="score-label">${riskLevel} risk</div>
-        <div class="score-bar">
-          <div class="score-bar-fill" style="width:${analysis.risk_score}%"></div>
-        </div>
-      </div>
-      <div class="analysis-meta">
-        <div class="analysis-title">${escapeHTML(analysis.title || analysis.domain || "Analysis")}</div>
-        <p class="analysis-summary">${escapeHTML(analysis.summary)}</p>
-        ${truncationNotice}
-      </div>
-    </div>
-    <div class="findings-list">${findings}</div>
-  `,
-  );
-
-  // Wire copy buttons on quotes
-  for (const btn of el.analysisResults.querySelectorAll("[data-copy]")) {
-    btn.addEventListener("click", async (e) => {
-      const text = btn.dataset.copy;
-      await copyToClipboard(text);
-      const original = btn.textContent;
-      btn.textContent = "Copied";
-      setTimeout(() => {
-        btn.textContent = original;
-      }, 1500);
-    });
-  }
-}
-
-function renderFinding(finding) {
-  const quoteHtml = finding.quote
-    ? `<blockquote class="finding-quote">
-        <span class="finding-quote-text">${escapeHTML(finding.quote)}</span>
-        <button class="btn-copy" data-copy="${escapeHTML(finding.quote)}" title="Copy quote">Copy</button>
-       </blockquote>`
-    : "";
-
-  return `
-    <article class="finding">
-      <div class="finding-header">
-        <h2 class="finding-title">${escapeHTML(finding.title)}</h2>
-        <span class="importance-tag importance-tag--${escapeHTML(finding.importance)}">${escapeHTML(finding.importance)}</span>
-      </div>
-      <p class="finding-description">${escapeHTML(finding.description)}</p>
-      ${quoteHtml}
-    </article>
-  `;
-}
-
 /* ─── History ────────────────────────────────────────────────── */
-
-async function renderHistory() {
-  const history = await getHistory();
-
-  if (history.length === 0) {
-    safeSetHTML(el.historyList, `<p class="history-empty">No analyses yet.</p>`);
-    return;
-  }
-
-  const historyHtml = history
-    .map(
-      (entry) => `
-    <div class="history-item" data-history-id="${escapeHTML(entry.id)}">
-      <div class="history-item-info">
-        <div class="history-item-title">${escapeHTML(entry.title || entry.domain || entry.url)}</div>
-        <div class="history-item-meta">${escapeHTML(entry.domain || "")} · ${formatDate(entry.analyzedAt)}</div>
-      </div>
-      <span class="history-item-score">${entry.risk_score}</span>
-    </div>
-  `,
-    )
-    .join("");
-
-  safeSetHTML(el.historyList, historyHtml);
-
-  for (const item of el.historyList.querySelectorAll("[data-history-id]")) {
-    item.addEventListener("click", () =>
-      openHistoryEntry(item.dataset.historyId, history),
-    );
-  }
-}
 
 function openHistoryEntry(id, history) {
   const entry = history.find((item) => item.id === id);
   if (!entry) return;
-  renderAnalysis(entry);
+  renderAnalysis(entry, el);
   document.getElementById("btn-export").onclick = () => exportAnalysis(entry);
   showView("analysis-view");
 }
 
 async function handleClearHistory() {
-  if (!confirm("Clear all saved analyses?")) return;
+  const confirmed = await showConfirmModal("Clear all saved analyses?");
+  if (!confirmed) return;
   await clearHistory();
-  await renderHistory();
-  renderDashboard();
+  await renderHistory(el, openHistoryEntry);
+  renderDashboard(state, el, providers);
 }
 
 /* ─── View switching ─────────────────────────────────────────── */
@@ -531,23 +406,6 @@ function setLoading(message) {
 
 function hideLoading() {
   el.loadingOverlay.classList.add("hidden");
-}
-
-/* ─── Messages ───────────────────────────────────────────────── */
-
-function showMessage(element, message, type) {
-  element.textContent = message;
-  element.className = type === "error" ? "message message--error" : "message";
-}
-
-function showHtmlMessage(element, htmlContent, type) {
-  safeSetHTML(element, htmlContent);
-  element.className = type === "error" ? "message message--error" : "message";
-}
-
-function hideMessage(element) {
-  element.textContent = "";
-  element.className = "message hidden";
 }
 
 /* ─── Chrome messaging ───────────────────────────────────────── */
@@ -584,103 +442,4 @@ function getModelLimit(settings) {
   // Cap at 8,000 tokens to prevent massive API credit drain.
   // 8k tokens ≈ 32,000 characters, enough for the vast majority of T&Cs.
   return Math.min(8000, Math.floor(model.maxTokens * 0.25));
-}
-
-/* ─── Utilities ──────────────────────────────────────────────── */
-
-function safeSetHTML(element, htmlString) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(htmlString, "text/html");
-  element.replaceChildren(...doc.body.childNodes);
-}
-
-function getRiskLevel(score) {
-  if (score >= 70) return "high";
-  if (score >= 40) return "medium";
-  return "low";
-}
-
-function getUserMessage(error) {
-  const messages = {
-    NO_API_KEY: "Add your API key in Settings first.",
-    INVALID_PROVIDER: "Invalid AI provider selected.",
-    INVALID_KEY: "API key rejected — check Settings.",
-    RATE_LIMITED: "Rate limit reached. Wait a moment and try again.",
-    NETWORK_ERROR: "Could not reach the AI service. Check your connection.",
-    TIMEOUT: "The AI took too long to respond. Try again.",
-    RESPONSE_ERROR: error.message,
-  };
-
-  if (error.message?.startsWith("PARSE_ERROR")) {
-    return "Unexpected response from the AI. Try again.";
-  }
-
-  return messages[error.code] || error.message || "Something went wrong.";
-}
-
-function getDomain(url) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "";
-  }
-}
-
-function formatDate(timestamp) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
-}
-
-function escapeHTML(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-async function copyToClipboard(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch (err) {
-    console.error("Failed to copy text: ", err);
-  }
-}
-
-function exportAnalysis(analysis) {
-  const lines = [
-    `T&C Lens Analysis: ${analysis.title || analysis.domain}`,
-    `URL: ${analysis.url}`,
-    `Date: ${formatDate(analysis.analyzedAt)}`,
-    `Risk Score: ${analysis.risk_score} (${getRiskLevel(analysis.risk_score)})`,
-    "",
-    `Summary: ${analysis.summary}`,
-    "",
-    "Findings:",
-    ...analysis.findings.map((f, i) =>
-      [
-        `${i + 1}. ${f.title} [${f.importance.toUpperCase()} RISK]`,
-        `   ${f.description}`,
-        f.quote ? `   Quote: "${f.quote}"` : "",
-      ]
-        .filter(Boolean)
-        .join("\\n"),
-    ),
-  ];
-
-  const blob = new Blob([lines.join("\\n")], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `tc-lens-analysis-${analysis.domain || "export"}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }

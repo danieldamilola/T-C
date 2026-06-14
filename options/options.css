@@ -1,11 +1,49 @@
+/* ─── Self-hosted Fonts ──────────────────────────────────────── */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/inter-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/inter-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../fonts/inter-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2");
+}
+
 /* ─── Design Tokens ──────────────────────────────────────────── */
 :root {
   --bg: #0e0e0e;
   --surface: #161616;
   --fg: #efefef;
-  --muted: #5a5a5a;
+  --muted: #8a8a8a; /* Raised from #5a5a5a for WCAG AA compliance (≥4.5:1 on #0e0e0e) */
   --dim: #2a2a2a;
   --line: #1f1f1f;
+  --focus: #6e9eff; /* Visible focus ring colour for keyboard navigation */
   --font: "Inter", system-ui, -apple-system, sans-serif;
   --mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 
@@ -58,6 +96,17 @@ a {
 
 .hidden {
   display: none !important;
+}
+
+/* ─── Focus styles (keyboard accessibility) ──────────────────── */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Remove default outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* ─── Header / Nav ───────────────────────────────────────────── */
@@ -316,6 +365,13 @@ select:focus {
   border-bottom-color: var(--fg);
 }
 
+/* Override focus-visible for inputs — they already show focus via border */
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-bottom-color: var(--focus);
+}
+
 input::placeholder {
   color: var(--muted);
 }
@@ -399,6 +455,7 @@ select option {
   left: 0;
   top: 0;
   height: 100%;
+  width: 0; /* Starts at 0; animated to target via JS + requestAnimationFrame */
   background: var(--fg);
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -410,7 +467,7 @@ select option {
 
 .truncation-notice {
   font-size: var(--text-xs);
-  color: #f59e0b; /* Subtle amber for warning */
+  color: #f59e0b; /* Amber warning accent */
   margin-top: 12px;
   padding: 8px 12px;
   background: rgba(245, 158, 11, 0.1);
@@ -636,9 +693,132 @@ select option {
   margin-bottom: 40px;
 }
 
+/* ─── Confirm modal ──────────────────────────────────────────── */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.confirm-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 32px;
+  max-width: 360px;
+  width: 100%;
+}
+
+.confirm-message {
+  font-size: var(--text-sm);
+  color: var(--fg);
+  line-height: 1.65;
+  margin-bottom: 24px;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+/* ─── Coming soon banner ─────────────────────────────────────── */
+.coming-soon {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--fg);
+  padding: 24px;
+  margin-top: 4px;
+}
+
+.coming-soon-badge {
+  display: inline-block;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bg);
+  background: var(--fg);
+  padding: 3px 8px;
+  margin-bottom: 14px;
+}
+
+.coming-soon-title {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--fg);
+  margin-bottom: 8px;
+}
+
+.coming-soon-description {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.75;
+  margin-bottom: 16px;
+}
+
+.coming-soon-cta {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.coming-soon-cta a {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: opacity 0.1s;
+}
+
+.coming-soon-cta a:hover {
+  opacity: 0.7;
+}
+
 /* ─── Divider ────────────────────────────────────────────────── */
 .divider {
   border: none;
   border-top: 1px solid var(--line);
   margin: 36px 0;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  nav {
+    padding: 0 20px;
+  }
+
+  main {
+    padding: 32px 20px 60px;
+  }
+
+  .status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-header {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .analysis-nav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .finding-header {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .confirm-box {
+    margin: 0 20px;
+  }
 }

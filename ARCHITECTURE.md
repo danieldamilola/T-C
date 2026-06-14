@@ -42,7 +42,7 @@ T&C Lens follows a **message-passing architecture** with three isolated executio
 - Act as a message relay between the options page and the content script (since they cannot message each other directly)
 - Listen for badge update requests from the options page and call `chrome.action.setBadgeText` / `setBadgeBackgroundColor`
 
-**Why we need a middleman:** The options page runs in its own tab with its own origin (`chrome-extension://...`). The content script runs in the context of the target web page. Chrome's messaging API only allows communication between a content script and the background — content scripts and extension pages cannot message each other directly. The background bridges this gap.
+**Why we use a middleman:** The options page runs in its own tab with its own origin (`chrome-extension://...`). The content script runs in the context of the target web page. While MV3 does allow extension pages to message content scripts via `chrome.tabs.sendMessage()`, routing through the background is more robust because it also handles on-demand script injection via `chrome.scripting.executeScript()`. The background coordinates both injection and message relay in a single flow.
 
 ### Context 2: Content Script (`content/scraper.js`)
 
@@ -165,7 +165,7 @@ Every step has explicit error handling. The extension never silently fails — e
 ## Security Considerations
 
 1. **API Key Storage** — Stored in `chrome.storage.local`, which is accessible only to the extension itself. Not sent to any server except the user's chosen AI provider.
-2. **Content Security Policy** — The extension uses a strict CSP that only allows connections to the AI provider API endpoints. No inline scripts, no `eval()`.
+2. **Content Security Policy** — The extension declares a strict CSP in `manifest.json` that restricts `connect-src` to only the AI provider API endpoints. No inline scripts, no `eval()`.
 3. **No DOM Injection** — The content script reads text but never modifies the page DOM. This prevents interference with the target page's behavior.
 4. **No Data Collection** — The extension does not phone home. There is no analytics, no telemetry, no usage tracking. All data stays local in the user's browser.
 5. **Minimal Permissions** — `activeTab` grants access only to the current tab when the user clicks the icon. `storage` is needed for settings. `scripting` is needed for on-demand content script injection. No broad host permissions.

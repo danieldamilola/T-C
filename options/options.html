@@ -4,14 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>T&C Lens</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="options.css" />
-    <script type="module" src="options.js"></script>
+    <script type="module" src="options.js?v=2"></script>
   </head>
   <body>
     <header>
@@ -106,6 +100,21 @@
             <select id="provider-select" name="provider"></select>
           </div>
 
+          <!-- Coming soon banner — shown when T&C Lens AI is selected -->
+          <div id="coming-soon-banner" class="coming-soon hidden">
+            <div class="coming-soon-badge">Coming Soon</div>
+            <p class="coming-soon-title">T&C Lens AI</p>
+            <p class="coming-soon-description">
+              No API key needed. We handle everything — just click analyze.<br />
+              A simple, affordable hosted option for everyone.
+            </p>
+            <p class="coming-soon-cta">
+              Want early access? <a href="https://github.com/danieldamilola/T-C" target="_blank" rel="noopener noreferrer">Star the repo</a> to stay updated.
+            </p>
+          </div>
+
+          <!-- BYOK fields — hidden when T&C Lens AI is selected -->
+          <div id="byok-fields">
           <div class="form-group">
             <label class="form-label" for="model-select">Model</label>
             <select id="model-select" name="model"></select>
@@ -134,6 +143,7 @@
             <button class="btn" type="submit">Save</button>
             <span id="cost-estimate" class="cost-estimate"></span>
           </div>
+          </div>
 
           <div id="settings-message" class="message hidden" role="status"></div>
         </form>
@@ -159,6 +169,23 @@
     >
       <div class="loading-spinner"></div>
       <div id="loading-message" class="loading-text">Analyzing…</div>
+    </div>
+
+    <!-- ── CONFIRM MODAL ────────────────────────────────────── -->
+    <div
+      id="confirm-overlay"
+      class="confirm-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-message"
+    >
+      <div class="confirm-box">
+        <p id="confirm-message" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button id="confirm-no" class="btn-ghost" type="button">Cancel</button>
+          <button id="confirm-yes" class="btn" type="button">Confirm</button>
+        </div>
+      </div>
     </div>
   </body>
 </html>

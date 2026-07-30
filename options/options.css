@@ -343,33 +343,68 @@ main {
   color: var(--muted);
 }
 
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--dim);
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
 input,
 select {
   width: 100%;
   background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--dim);
+  border: 1px solid var(--rule);
   color: var(--fg);
-  padding: 8px 0;
-  font-family: inherit;
+  padding: 12px 14px;
+  font-family: var(--mono);
   font-size: var(--text-sm);
-  transition: border-bottom-color 0.1s;
+  transition: border-color 0.1s, background 0.1s;
   border-radius: 0;
   -webkit-appearance: none;
   appearance: none;
 }
 
+select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 14px;
+  padding-right: 40px;
+}
+
 input:focus,
 select:focus {
   outline: none;
-  border-bottom-color: var(--fg);
+  border-color: var(--fg);
+  background: var(--surface);
 }
 
 /* Override focus-visible for inputs — they already show focus via border */
 input:focus-visible,
 select:focus-visible {
   outline: none;
-  border-bottom-color: var(--focus);
+  border-color: var(--focus);
+}
+  outline: none;
+  border-color: var(--fg);
+  background: var(--surface);
+}
+
+/* Override focus-visible for inputs — they already show focus via border */
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--focus);
 }
 
 input::placeholder {

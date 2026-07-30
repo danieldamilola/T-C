@@ -314,7 +314,9 @@ async function analyzeCurrentPage() {
 
     if (!text) throw new Error("Could not extract text from this page.");
 
-    const prepared = prepareTextForAI(text, getModelLimit(state.settings));
+    // Bypass truncation entirely for the hosted T&C Lens AI
+    const limit = state.settings.provider === "tclens" ? Infinity : getModelLimit(state.settings);
+    const prepared = prepareTextForAI(text, limit);
 
     setLoading("Analyzing with AI…");
 

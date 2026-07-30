@@ -26,7 +26,9 @@ Bring your own API key. No account required. No data leaves your browser except 
 
 ## Highlights
 
-**Bring Your Own Key** — Works with 9 providers: Gemini, OpenAI, Anthropic, Groq, DeepSeek, Mistral, xAI, OpenRouter, and Together AI. Use free tiers or your existing API keys.
+**Bring Your Own Key** — Works with 9 providers: Gemini, OpenAI, Anthropic, Groq, DeepSeek, Mistral, xAI, OpenRouter, and Together AI. Use free tiers or your existing API keys. *(Note: BYOK mode automatically truncates extremely large documents to ~32,000 characters to prevent unexpected API costs).*
+
+**Hosted T&C Lens AI** — No API key needed. Our premium hosted tier seamlessly processes full-length documents of any size with zero truncation limits.
 
 **Smart Extraction** — Intelligent scraper targets legal content specifically, filtering out navigation, headers, footers, and cookie banners.
 
@@ -70,7 +72,7 @@ git clone https://github.com/danieldamilola/T-C.git
 5. **Save**
 
 > [!TIP]
-> Don't have an API key? **T&C Lens AI** (a hosted, no-key-needed option) is coming soon. Star this repo to stay updated.
+> Don't want to manage your own API key or worry about document truncation limits? Get unrestricted, full-document analysis with the **Hosted T&C Lens AI**. Create an account at [tclens.me](https://tclens.me) to get your live key.
 
 ## Usage
 

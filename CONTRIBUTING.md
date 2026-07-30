@@ -475,6 +475,7 @@ These are non-negotiable for T&C Lens specifically:
 | **No `eval()` or inline script execution**                   | Manifest V3 CSP forbids it                           |
 | **API key never logged to console**                          | Security requirement                                 |
 | **All AI responses validated before rendering**              | Prevents rendering untrusted content                 |
+| **BYOK requests must be capped at 8,000 tokens**             | Protects user API credits; Hosted AI limit is `Infinity` |
 
 ---
 

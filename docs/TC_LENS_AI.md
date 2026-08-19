@@ -1,18 +1,19 @@
-# T&C Lens AI — Architecture Plan
+# T&C Lens AI — Architecture (Current)
 
 Credit-based. No subscriptions. No plans. Buy credits, use credits.
+
+> **Status:** Backend live in the `tclens-web` project (Next.js). Extension client-side handler done; the extension auth/settings UI is still "Coming Soon".
 
 ---
 
 ## How It Works
 
 ```
-1. User signs up (gets 1 free credit)
-2. User clicks Analyze → backend calls DeepSeek → deducts 1 credit
-3. Credits run out → "Buy more" button → Stripe checkout → credits added
+1. User signs in with GitHub/Google (Supabase OAuth) → gets 1 free credit
+2. User generates an API key (tcl_live_…) on the dashboard
+3. User pastes the key into the extension → Analyze → backend calls DeepSeek → deducts 1 credit
+4. Credits run out → "Buy credits" → Lemon Squeezy checkout → webhook adds credits
 ```
-
-That's the entire product.
 
 ---
 
@@ -20,173 +21,132 @@ That's the entire product.
 
 | Package | Price | Credits | Per-analysis cost |
 |---------|-------|---------|-------------------|
-| Starter | $2 | 25 | $0.08 |
-| Value | $5 | 75 | $0.07 |
-| Bulk | $10 | 200 | $0.05 |
+| Starter | $2 | 20 | $0.10 |
+| Plus | $5 | 50 | $0.10 |
+| Pro | $10 | 150 | ~$0.067 |
 
-> Your cost per analysis (DeepSeek V4 Flash — $0.14/M input, $0.28/M output): **~$0.002**. Margin: **95%+**.
-> 1M token context window — handles even the longest legal documents without truncation.
-> Users get **1 free credit** on signup. No free tier beyond that.
-
-### Your Profit (after Stripe fees + DeepSeek cost)
-
-| Package | Price | Stripe Fee | DeepSeek Cost | **Your Profit** | **Margin** |
-|---------|-------|------------|---------------|-----------------|------------|
-| Starter | $2 | $0.36 | $0.08 | **$1.56** | 78% |
-| Value | $5 | $0.45 | $0.23 | **$4.32** | 86% |
-| Bulk | $10 | $0.59 | $0.60 | **$8.81** | 88% |
-
-> **Note:** Stripe charges 2.9% + $0.30 per transaction. The $0.30 flat fee hits the $2 tier hardest. Hosting (Vercel + Supabase) is free at this scale.
+> Users get **1 free credit** on first signup. No free tier beyond that.
+> DeepSeek (`deepseek-chat`) costs roughly $0.14/M input, $0.28/M output — per analysis ≈ $0.002.
+> Server validates price/credits tiers against `VALID_TIERS` in `api/credits/buy/route.ts` — clients cannot tamper.
 
 ---
 
 ## Architecture
 
 ```
-Extension                          Backend (Vercel)
-┌──────────────┐                  ┌──────────────────────┐
-│              │  POST /analyze   │                      │
-│  Options UI  │ ───────────────► │  Verify JWT          │
-│              │  (JWT + text)    │  Check credits > 0   │
-│              │                  │  Call DeepSeek V4    │
-│              │  ◄─────────────  │  Deduct 1 credit     │
-│              │  (analysis JSON) │  Return result       │
-└──────────────┘                  └──────────┬───────────┘
-                                             │
-                                  ┌──────────┴───────────┐
-                                  │  Supabase             │
-                                  │  • Auth (JWT)         │
-                                  │  • Postgres (credits) │
-                                  └──────────────────────┘
+Extension (T-C)                      Backend (tclens-web, Next.js + Supabase)
+┌──────────────┐                     ┌────────────────────────────────┐
+│              │  POST /api/analyze  │                                │
+│  Settings UI │ ──────────────────► │  Verify tcl_live_ key hash     │
+│  (api key)   │  (Bearer key+text)  │  Check credits > 0             │
+│              │                     │  Call DeepSeek (deepseek-chat) │
+│              │  ◄───────────────── │  Deduct 1 credit               │
+│              │  (analysis JSON)    │                                │
+└──────────────┘                     └──────────┬─────────────────────┘
+                                                │
+                          ┌─────────────────────┼──────────────────────┐
+                          │  Supabase            │  Lemon Squeezy        │
+                          │  • OAuth (GH/Google) │  • Checkout (hosted)  │
+                          │  • profiles/credits  │  • Webhook → credits  │
+                          └─────────────────────┴──────────────────────┘
 ```
+
+**Key model:** users generate a `tcl_live_<48-hex>` key. Only the SHA-256 hash is stored (`api_keys.key_hash`). The server hashes the incoming `Bearer` token and looks it up with a service-role (RLS-bypassing) client.
 
 ---
 
-## Database — 2 tables
+## Database — 3 tables
 
 ```sql
 -- User profiles (extends Supabase Auth)
 CREATE TABLE public.profiles (
-    id          UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email       TEXT NOT NULL,
-    credits     INTEGER NOT NULL DEFAULT 1,   -- 1 free on signup
+    id                      UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email                   TEXT NOT NULL,
+    credits                 INTEGER NOT NULL DEFAULT 1,   -- 1 free on signup
+    total_purchased_credits INTEGER NOT NULL DEFAULT 0,
+    created_at              TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Hashed API keys
+CREATE TABLE public.api_keys (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    key_hash    TEXT NOT NULL UNIQUE,   -- SHA-256 of tcl_live_<secret>
+    prefix      TEXT NOT NULL,          -- 'tcl_live_'
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Payment receipts
-CREATE TABLE public.payments (
+-- Payment receipts (Lemon Squeezy)
+CREATE TABLE public.billing_history (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES public.profiles(id),
     amount_cents    INTEGER NOT NULL,          -- e.g. 200 = $2.00
-    credits_added   INTEGER NOT NULL,          -- e.g. 25
-    stripe_session  TEXT NOT NULL,             -- Stripe checkout session ID
+    credits_added   INTEGER NOT NULL,          -- e.g. 20
+    stripe_session_id TEXT NOT NULL,           -- stores ls_<order_id> (column kept for backwards compat)
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
 ---
 
-## API — 6 endpoints
+## API — 4 endpoints (plus webhook)
 
-| Method | Path | Auth? | What it does |
-|--------|------|-------|-------------|
-| `POST` | `/api/auth/signup` | No | Create account → 1 free credit |
-| `POST` | `/api/auth/login` | No | Return JWT |
-| `GET` | `/api/auth/me` | Yes | Return email + credit balance |
-| `POST` | `/api/analyze` | Yes | Check credits → call DeepSeek V4 Flash → deduct 1 → return result |
-| `POST` | `/api/credits/buy` | Yes | Create Stripe Checkout session → return URL |
-| `POST` | `/api/webhooks/stripe` | No* | Stripe calls this → add credits to user |
+| Route | Auth | What it does |
+|-------|------|-------------|
+| `POST /api/analyze` | Bearer `tcl_live_…` | Hash key → check credits → call DeepSeek → deduct 1 → return analysis text. CORS-enabled. |
+| `GET /api/credits/balance` | Bearer `tcl_live_…` | Return `{ credits, total_purchased_credits }` — used by the extension's settings credits card. CORS-enabled. |
+| `POST /api/credits/buy` | None (server validates) | Validate tier → create Lemon Squeezy checkout → return hosted URL. |
+| `POST /api/webhooks/lemonsqueezy` | HMAC `x-signature` | Verify signature → log order → add credits to profile. |
 
-*Webhook is verified via Stripe signature, not JWT.
+> Supabase Auth itself handles signup/login (`/login` page), so there are no custom `/api/auth/*` endpoints.
 
 ---
 
-## Backend Files — 10 total
+## Backend Files (tclens-web)
 
 ```
-server/
-├── vercel.json
-├── package.json
-├── .env.example
-│
-├── lib/
-│   ├── supabase.js           ← Supabase client (5 lines)
-│   ├── auth.js               ← Verify JWT from request header (20 lines)
-│   └── deepseek.js           ← Call DeepSeek V4 Flash API with SYSTEM_PROMPT (40 lines)
-│
-├── api/
-│   ├── auth/
-│   │   ├── signup.js          ← Create user + profile with 1 credit (30 lines)
-│   │   ├── login.js           ← Authenticate, return JWT (25 lines)
-│   │   └── me.js              ← Return profile + credits (15 lines)
-│   ├── analyze.js             ← The main endpoint (50 lines)
-│   ├── credits/
-│   │   └── buy.js             ← Create Stripe one-time checkout (30 lines)
-│   └── webhooks/
-│       └── stripe.js          ← Handle payment success → add credits (40 lines)
-│
-└── sql/
-    └── schema.sql             ← The 2 tables above (15 lines)
+src/
+├── app/
+│   ├── api/
+│   │   ├── analyze/route.ts                 ← Key check + credits + DeepSeek proxy
+│   │   ├── credits/buy/route.ts             ← Lemon Squeezy checkout creation
+│   │   ├── credits/balance/route.ts         ← Credit balance lookup for the extension
+│   │   └── webhooks/lemonsqueezy/route.ts   ← Signature-verified credit top-up
+│   ├── dashboard/page.tsx                   ← Credits display, buy packs, API key generation
+│   ├── dashboard/billing/page.tsx           ← Purchase history
+│   ├── login/page.tsx                       ← Supabase OAuth (GitHub/Google)
+│   └── page.tsx                             ← Landing page (pricing, features)
+└── lib/
+    └── supabase.ts                          ← Supabase client (anon key)
 ```
-
-**~270 lines of backend code.**
 
 ---
 
-## Extension Changes — 9 files
+## Extension Changes — status
 
-| File | Action | What |
+| File | Status | What |
 |------|--------|------|
-| `lib/providers.js` | MODIFY | Remove `comingSoon`, add `tc-lens-api.vercel.app` config |
-| `lib/ai-client.js` | MODIFY | Add `analyzeWithTCLens()` — sends JWT + text to backend |
-| `lib/storage.js` | MODIFY | Add `tclensToken`, `tclensEmail`, `tclensCredits` |
-| `options/auth.js` | NEW | Login, signup, logout functions (~80 lines) |
-| `options/options.html` | MODIFY | Replace coming-soon banner → login form + account card |
-| `options/options.css` | MODIFY | Auth form + credit display styles (~50 lines) |
-| `options/options.js` | MODIFY | Wire auth events, buy credits flow |
-| `options/utils.js` | MODIFY | Add `QUOTA_EXCEEDED` error message |
-| `manifest.json` | MODIFY | Add backend URL to CSP `connect-src` |
+| `lib/providers.js` | ✅ DONE | `tclens` provider → `https://www.tclens.me/api/analyze` + `creditsUrl` |
+| `lib/ai-client.js` | ✅ DONE | `analyzeWithTCLens()` + `fetchTCLensBalance()` |
+| `options/options.js` | ✅ DONE | `Infinity` truncation limit; credits card wiring; dynamic tier labels (`free`/`paid`/`own AI`) |
+| `options/options.html` | ✅ DONE | Credits card (balance, progress bar, free/paid badge) replaces the old "Coming Soon" banner |
+| `options/renderer.js` | ✅ DONE | Dashboard provider cell shows credits left for `tclens` |
+| `manifest.json` | ✅ DONE | `https://*.tclens.me` allowed in CSP `connect-src` |
 
-**~200 new lines on the extension side.**
+**Remaining work:** none — the hosted provider is fully wired. Users paste their `tcl_live_…` key from the tclens.me dashboard and see their balance live in Settings.
 
 ---
 
-## What the user sees
+## Error codes (from `/api/analyze`)
 
-### Settings → T&C Lens AI (logged out)
-```
-┌─────────────────────────────────────┐
-│  T&C Lens AI                        │
-│  No API key needed. Just sign in.   │
-│                                     │
-│  Email: [___________________]       │
-│  Password: [________________]       │
-│                                     │
-│  [SIGN IN]    Create Account        │
-└─────────────────────────────────────┘
-```
-
-### Settings → T&C Lens AI (logged in)
-```
-┌─────────────────────────────────────┐
-│  user@email.com              FREE   │
-│                                     │
-│  Credits remaining: 1               │
-│  ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
-│                                     │
-│  [BUY CREDITS]         Sign Out     │
-└─────────────────────────────────────┘
-```
-
-### Dashboard → credits exhausted
-```
-┌─────────────────────────────────────┐
-│  You're out of credits.             │
-│  Buy more to continue analyzing.    │
-│                                     │
-│  [BUY 25 CREDITS — $2]             │
-└─────────────────────────────────────┘
-```
+| Status | Body | Meaning |
+|--------|------|---------|
+| `400` | `Missing or invalid API key format` | Header missing or not `Bearer tcl_live_…` |
+| `401` | `Invalid API key` | Key hash not found in `api_keys` |
+| `402` | `Insufficient credits…` | `profiles.credits <= 0` |
+| `400` | `Missing text to analyze` | Empty request body |
+| `502` | `AI provider error` | DeepSeek call failed |
+| `500` | `Internal Server Error` | Unhandled exception |
 
 ---
 
@@ -194,23 +154,9 @@ server/
 
 | Decision | Answer |
 |----------|--------|
-| **Domain** | Free Vercel subdomain: `tc-lens-api.vercel.app` (no cost) |
-| **Auth** | Email/password via Supabase Auth |
-| **Repo** | `server/` folder inside the current `T-C` repo |
-| **AI Model** | DeepSeek V4 Flash (1M context, cheapest option) |
+| **Domain** | `www.tclens.me` (landing) + `tclens.me` |
+| **Auth** | Supabase OAuth — GitHub + Google, no email/password |
+| **Repo** | `tclens-web/` (Next.js, TypeScript, Tailwind) — sibling of `T-C` |
+| **AI Model** | DeepSeek `deepseek-chat` (`response_format: json_object`) |
+| **Payments** | Lemon Squeezy (hosted checkout + HMAC webhook) — *not* Stripe |
 | **Pricing** | Credit-based, no subscriptions |
-
----
-
-## Implementation Order
-
-| Step | What | Time |
-|------|------|------|
-| 1 | Supabase project + database schema | 30 min |
-| 2 | Auth endpoints (signup, login, me) | 1.5 hours |
-| 3 | Analyze endpoint (DeepSeek proxy + credit deduction) | 1.5 hours |
-| 4 | Stripe checkout + webhook (buy credits) | 2 hours |
-| 5 | Extension auth UI (login form + account card) | 2 hours |
-| 6 | Extension analyze flow (tclens handler) | 1 hour |
-| 7 | Deploy to Vercel + test | 1 hour |
-| **Total** | | **~9.5 hours** |

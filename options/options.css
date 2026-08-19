@@ -98,6 +98,10 @@ a {
   display: none !important;
 }
 
+.mono {
+  font-family: var(--mono);
+}
+
 /* ─── Focus styles (keyboard accessibility) ──────────────────── */
 :focus-visible {
   outline: 2px solid var(--focus);
@@ -760,54 +764,99 @@ select option {
   gap: 16px;
 }
 
-/* ─── Coming soon banner ─────────────────────────────────────── */
-.coming-soon {
+/* ─── T&C Lens AI credits card ───────────────────────────────── */
+.credits-card {
   border: 1px solid var(--line);
   border-left: 2px solid var(--fg);
   padding: 24px;
   margin-top: 4px;
 }
 
-.coming-soon-badge {
-  display: inline-block;
+.credits-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.credits-card-title {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.credits-tier {
   font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid var(--dim);
+  color: var(--muted);
+}
+
+.credits-tier--paid {
   color: var(--bg);
   background: var(--fg);
-  padding: 3px 8px;
-  margin-bottom: 14px;
+  border-color: var(--fg);
 }
 
-.coming-soon-title {
-  font-size: var(--text-md);
-  font-weight: 500;
-  color: var(--fg);
-  margin-bottom: 8px;
+.credits-count-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
-.coming-soon-description {
+.credits-count {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.credits-unit {
   font-size: var(--text-sm);
   color: var(--muted);
-  line-height: 1.75;
-  margin-bottom: 16px;
+  font-family: var(--mono);
 }
 
-.coming-soon-cta {
+.credits-track {
+  height: 2px;
+  background: var(--dim);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.credits-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--fg);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.credits-meta {
+  display: flex;
+  justify-content: space-between;
   font-size: var(--text-xs);
   color: var(--muted);
+  font-family: var(--mono);
 }
 
-.coming-soon-cta a {
-  color: var(--fg);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  transition: opacity 0.1s;
+.credits-warning {
+  margin-top: 16px;
+  padding: 10px 14px;
+  font-size: var(--text-xs);
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 2px solid #f59e0b;
 }
 
-.coming-soon-cta a:hover {
-  opacity: 0.7;
+.credits-note {
+  margin-top: 14px;
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 
 /* ─── Divider ────────────────────────────────────────────────── */

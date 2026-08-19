@@ -64,6 +64,16 @@ export function renderProviderCell(state, el, providers) {
   el.apiStatus.className = hasKey
     ? "status-dot status-dot--ok"
     : "status-dot status-dot--warn";
+
+  if (state.settings.provider === "tclens") {
+    el.providerStatus.textContent = !hasKey
+      ? "No API key — go to Settings."
+      : state.tclensBalance
+        ? `${state.tclensBalance.credits} credits left`
+        : "Hosted AI";
+    return;
+  }
+
   el.providerStatus.textContent = hasKey
     ? `${el.modelSelect.value || state.settings.model}`
     : "No API key — go to Settings.";

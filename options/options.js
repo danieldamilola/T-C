@@ -216,10 +216,8 @@ function updateCostEstimate() {
     return;
   }
 
-  // Hosted T&C Lens AI: label by purchase state, not cost
   if (providerId === "tclens") {
-    const total = state.tclensBalance?.total_purchased_credits || 0;
-    el.costEstimate.textContent = total > 1 ? "paid" : "free";
+    el.costEstimate.textContent = "";
     return;
   }
 
@@ -272,8 +270,10 @@ function setTCLensLoading() {
   el.tclensCount.textContent = "…";
   el.tclensTotal.textContent = "—";
   el.tclensUsed.textContent = "—";
-  el.tclensTier.textContent = "—";
-  el.tclensTier.className = "credits-tier";
+  if (el.tclensTier) {
+    el.tclensTier.textContent = "—";
+    el.tclensTier.className = "credits-tier";
+  }
   el.tclensWarning.classList.add("hidden");
   el.tclensNote.textContent = "Checking your balance…";
   updateCostEstimate();
@@ -293,18 +293,20 @@ function renderTCLensCredits(balance) {
   el.tclensFill.style.width = `${pctUsed}%`;
   el.tclensTotal.textContent = `${actualTotal} credits purchased`;
   el.tclensUsed.textContent = `${pctUsed}% used`;
-  el.tclensTier.textContent = paid ? "paid" : "free";
-  el.tclensTier.className = `credits-tier${paid ? " credits-tier--paid" : ""}`;
+  if (el.tclensTier) {
+    el.tclensTier.textContent = paid ? "paid" : "free";
+    el.tclensTier.className = `credits-tier${paid ? " credits-tier--paid" : ""}`;
+  }
 
   const low = credits < 20;
   el.tclensWarning.textContent = low
-    ? "Running low — buy more at tclens.me."
+    ? "Running low, buy more at tclens.me."
     : "";
   el.tclensWarning.classList.toggle("hidden", !low);
 
   el.tclensNote.textContent = paid
-    ? "Paid plan — need more? Visit tclens.me."
-    : "Free tier — 1 free credit included with signup.";
+    ? "Paid plan, need more? Visit tclens.me."
+    : "Free tier, 1 free credit included with signup.";
   updateCostEstimate();
 }
 
@@ -313,8 +315,10 @@ function resetTCLensPanel(note) {
   el.tclensFill.style.width = "0%";
   el.tclensTotal.textContent = "—";
   el.tclensUsed.textContent = "—";
-  el.tclensTier.textContent = "—";
-  el.tclensTier.className = "credits-tier";
+  if (el.tclensTier) {
+    el.tclensTier.textContent = "—";
+    el.tclensTier.className = "credits-tier";
+  }
   el.tclensWarning.classList.add("hidden");
   el.tclensNote.textContent = note;
   updateCostEstimate();

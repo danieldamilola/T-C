@@ -217,6 +217,7 @@ function updateCostEstimate() {
   }
 
   if (providerId === "tclens") {
+    el.costEstimate.textContent = "";
     return;
   }
 
